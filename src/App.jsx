@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import {
   FEATURES,
   INTERCEPT,
+  MODEL,
+  DEFAULT_INPUT,
   predict,
   contributions,
   classify
@@ -14,6 +16,10 @@ function pct(p, digits = 1) {
 
 function fmt(n, digits = 2) {
   return Number(n).toFixed(digits)
+}
+
+function valueFmt(value, step = 1) {
+  return Number(value).toFixed(step < 1 ? 1 : 0)
 }
 
 function SegmentedBar({ value, segments = 24, tone = 'neutral' }) {
@@ -30,11 +36,11 @@ function SegmentedBar({ value, segments = 24, tone = 'neutral' }) {
 // Compact slider for the side panel — single row + track. No hint/beta footer.
 function Slider({ feature, value, onChange }) {
   return (
-    <div className="slider-row" title={`${feature.label} — β = ${fmt(feature.beta, 3)}. ${feature.hint}`}>
+    <div className="slider-row" title={`${feature.label} — learned β = ${fmt(feature.beta, 3)}. ${feature.hint}`}>
       <div className="slider-head">
         <span className="label">{feature.label}</span>
         <span className="slider-value">
-          <span className="num">{value}</span>
+          <span className="num">{valueFmt(value, feature.step)}</span>
           <span className="unit">{feature.unit}</span>
         </span>
       </div>
@@ -83,18 +89,6 @@ function StatBlock({ label, value, unit }) {
   )
 }
 
-const DEFAULT_INPUT = {
-  weekly_sessions: 10,
-  avg_session_min: 24,
-  features_used: 6,
-  days_active_30: 14,
-  content_created: 9,
-  collaborators_invited: 1,
-  paywall_hits: 2,
-  tenure_days: 28,
-  support_tickets: 0
-}
-
 export default function App() {
   const [input, setInput] = useState(DEFAULT_INPUT)
   const [tableSort, setTableSort] = useState('probability')
@@ -102,14 +96,15 @@ export default function App() {
   const probability = useMemo(() => predict(input), [input])
   const contrib = useMemo(() => contributions(input), [input])
   const tier = useMemo(() => classify(probability), [probability])
-  const dataset = useMemo(() => generateDataset(200, 7), [])
+  const dataset = useMemo(() => generateDataset(), [])
   const stats = useMemo(() => datasetStats(dataset), [dataset])
 
   const sortedDataset = useMemo(() => {
     const copy = [...dataset]
     if (tableSort === 'probability') copy.sort((a, b) => b.probability - a.probability)
+    if (tableSort === 'usage_volume') copy.sort((a, b) => b.usage_volume - a.usage_volume)
+    if (tableSort === 'mrr_amount') copy.sort((a, b) => b.mrr_amount - a.mrr_amount)
     if (tableSort === 'tenure_days') copy.sort((a, b) => b.tenure_days - a.tenure_days)
-    if (tableSort === 'paywall_hits') copy.sort((a, b) => b.paywall_hits - a.paywall_hits)
     return copy.slice(0, 12)
   }, [dataset, tableSort])
 
@@ -138,7 +133,7 @@ export default function App() {
   }
 
   function loadFromRow(row) {
-    const { id, handle, archetype, probability, converted, ...features } = row
+    const features = Object.fromEntries(FEATURES.map((feature) => [feature.key, row[feature.key]]))
     setInput(features)
   }
 
@@ -149,17 +144,17 @@ export default function App() {
         <div className="brand">
           <span className="brand-mark" />
           <span className="brand-text">UPGRADE / PREDICTOR</span>
-          <span className="brand-version">V1.0</span>
+          <span className="brand-version">RAVENSTACK</span>
         </div>
         <div className="topbar-center">
-          <span className="label">FREE → PAID PROBABILITY MODEL</span>
+          <span className="label">DATASET-BACKED SUBSCRIPTION UPGRADE MODEL</span>
         </div>
       </header>
 
       {/* HERO — % left, sliders right, side by side */}
       <section className="hero">
         <div className="hero-left">
-          <div className="label dim">PREDICTED UPGRADE PROBABILITY</div>
+          <div className="label dim">PREDICTED UPGRADE PROBABILITY · TRAINED ON KAGGLE CSV</div>
           <div className="hero-number">
             <span className="hero-doto">{pct(probability, 1)}</span>
             <span className="hero-percent">%</span>
@@ -177,7 +172,7 @@ export default function App() {
 
         <div className="hero-right panel">
           <div className="panel-head">
-            <span className="label">USER PROFILE / INPUTS</span>
+            <span className="label">SUBSCRIPTION PROFILE / INPUTS</span>
             <span className="label dim">{FEATURES.length} FEATURES</span>
           </div>
           <div className="slider-list">
@@ -197,7 +192,7 @@ export default function App() {
       <section className="panel contrib-strip-panel">
         <div className="panel-head">
           <span className="label">FEATURE CONTRIBUTIONS</span>
-          <span className="label dim">LOG-ODDS Δ · LIVE</span>
+          <span className="label dim">STANDARDIZED LOG-ODDS Δ · LIVE</span>
         </div>
         <div className="contrib-strip">
           {stripRows.map((row) => (
@@ -216,13 +211,13 @@ export default function App() {
         <div className="panel panel-formula">
           <div className="panel-head">
             <span className="label">MODEL</span>
-            <span className="label dim">LOGISTIC REGRESSION</span>
+            <span className="label dim">LOGISTIC REGRESSION · TEST AUC {fmt(MODEL.test_auc, 3)}</span>
           </div>
           <div className="formula">
             <div className="formula-line">
               <span className="formula-lhs">P(upgrade)</span>
               <span className="formula-eq">=</span>
-              <span className="formula-rhs">σ( β₀ + Σ βᵢ · xᵢ )</span>
+              <span className="formula-rhs">σ( β₀ + Σ βᵢ · zscore(xᵢ) )</span>
             </div>
             <div className="formula-line">
               <span className="formula-lhs">σ(z)</span>
@@ -232,15 +227,15 @@ export default function App() {
             <div className="formula-line">
               <span className="formula-lhs">z</span>
               <span className="formula-eq">=</span>
-              <span className="formula-rhs">{fmt(INTERCEPT, 2)} + Σ βᵢ · xᵢ</span>
+              <span className="formula-rhs">{fmt(INTERCEPT, 2)} + Σ learned βᵢ · standardized xᵢ</span>
             </div>
           </div>
         </div>
 
         <div className="panel panel-cohort">
           <div className="panel-head">
-            <span className="label">COHORT / N=200</span>
-            <span className="label dim">SEGMENT COUNTS</span>
+            <span className="label">DATASET / N={stats.n}</span>
+            <span className="label dim">RAVENSTACK SUBSCRIPTIONS</span>
           </div>
           <div className="cohort-grid">
             <StatBlock label="HOT" value={stats.hot} unit="USERS" />
@@ -248,7 +243,7 @@ export default function App() {
             <StatBlock label="COOL" value={stats.cool} unit="USERS" />
             <StatBlock label="COLD" value={stats.cold} unit="USERS" />
             <StatBlock label="MEAN P" value={pct(stats.meanP, 1)} unit="%" />
-            <StatBlock label="CONVERTED" value={pct(stats.conversionRate, 1)} unit="%" />
+            <StatBlock label="UPGRADED" value={pct(stats.upgradeRate, 1)} unit="%" />
           </div>
         </div>
       </section>
@@ -256,12 +251,13 @@ export default function App() {
       {/* DATASET */}
       <section className="panel panel-dataset">
         <div className="panel-head">
-          <span className="label">SYNTHETIC DATASET / TOP 12</span>
+          <span className="label">KAGGLE DATASET / TOP 12</span>
           <div className="seg-control">
             {[
               { id: 'probability', label: 'BY P' },
-              { id: 'tenure_days', label: 'BY TENURE' },
-              { id: 'paywall_hits', label: 'BY PAYWALL' }
+              { id: 'usage_volume', label: 'BY USAGE' },
+              { id: 'mrr_amount', label: 'BY MRR' },
+              { id: 'tenure_days', label: 'BY TENURE' }
             ].map((s) => (
               <button
                 key={s.id}
@@ -277,14 +273,14 @@ export default function App() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>HANDLE</th>
-                <th>ARCH</th>
-                <th className="num">SESS/WK</th>
-                <th className="num">MIN</th>
+                <th>SUB</th>
+                <th>ACCOUNT</th>
+                <th>PLAN</th>
+                <th>INDUSTRY</th>
+                <th className="num">USAGE</th>
                 <th className="num">FEATURES</th>
-                <th className="num">ACTIVE</th>
-                <th className="num">PAYWALL</th>
+                <th className="num">MRR</th>
+                <th className="num">BETA</th>
                 <th className="num">P(UPGRADE)</th>
                 <th>TIER</th>
                 <th>LABEL</th>
@@ -296,18 +292,18 @@ export default function App() {
                 return (
                   <tr key={r.id} onClick={() => loadFromRow(r)} className="data-row">
                     <td className="mono dim">{r.id}</td>
-                    <td className="mono">{r.handle}</td>
-                    <td className="mono dim">{r.archetype}</td>
-                    <td className="num mono">{r.weekly_sessions}</td>
-                    <td className="num mono">{r.avg_session_min}</td>
+                    <td className="mono">{r.account}</td>
+                    <td className="mono dim">{r.plan_tier}</td>
+                    <td className="mono dim">{r.industry}</td>
+                    <td className="num mono">{r.usage_volume}</td>
                     <td className="num mono">{r.features_used}</td>
-                    <td className="num mono">{r.days_active_30}</td>
-                    <td className="num mono">{r.paywall_hits}</td>
+                    <td className="num mono">${Math.round(r.mrr_amount)}</td>
+                    <td className="num mono">{r.beta_feature_events}</td>
                     <td className="num mono">{pct(r.probability, 1)}%</td>
                     <td>
                       <span className={`tier-pill tier-${t.tone}`}>{t.tier}</span>
                     </td>
-                    <td className="mono dim">{r.converted ? 'PAID' : 'FREE'}</td>
+                    <td className="mono dim">{r.upgraded ? 'UPGRADED' : 'NO UPGRADE'}</td>
                   </tr>
                 )
               })}
@@ -316,7 +312,7 @@ export default function App() {
         </div>
         <div className="table-foot">
           <span className="label dim">CLICK ANY ROW TO LOAD INTO PREDICTOR</span>
-          <span className="label dim mono">{dataset.length} RECORDS · SEED 7</span>
+          <span className="label dim mono">{MODEL.dataset_rows} SOURCE SUBSCRIPTIONS · {MODEL.source.license} DATASET</span>
         </div>
       </section>
 
@@ -324,7 +320,7 @@ export default function App() {
       <footer className="botbar">
         <span className="label dim">UPGRADE PREDICTOR</span>
         <span className="label dim">/</span>
-        <span className="label dim">CLIENT-SIDE INFERENCE · LOGISTIC REGRESSION</span>
+        <span className="label dim">CLIENT-SIDE INFERENCE · TRAINED FROM RAVENSTACK CSV</span>
       </footer>
     </div>
   )

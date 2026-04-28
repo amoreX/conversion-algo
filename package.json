@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "train:model": "node scripts/train-model.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

@@ -307,7 +307,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 
 .contrib-strip {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
   gap: var(--space-sm);
   align-items: end;
 }
@@ -367,11 +367,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 }
 
 @media (max-width: 1100px) {
-  .contrib-strip {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: var(--space-md);
-    row-gap: var(--space-lg);
-  }
+  .contrib-strip { gap: var(--space-md); row-gap: var(--space-lg); }
   .support-grid { grid-template-columns: 1fr; }
 }
 
@@ -656,7 +652,7 @@ button:disabled { cursor: default; opacity: 0.5; }
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  min-width: 720px;
+  min-width: 980px;
 }
 
 .data-table th {
